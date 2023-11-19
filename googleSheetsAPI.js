@@ -1,30 +1,36 @@
 
 const { google } = require("googleapis");
-const credentials = require('./googleCredentials.json'); //Não versionar as credenciais - criar crdenciais no googleCloud
+const GOOGLE_CREDENTIALS = require('./googleCredentials.json'); //Não versionar as credenciais - criar crdenciais no googleCloud
 
 //ID da planilha: ver na URL da planilha:
-const spreadsheetId = '1Sc-oXexjYgWubDapmL43nEC1M5Q9mik9hTqoToYWb3Q';
+const SPREADSHEET_ID = '1Sc-oXexjYgWubDapmL43nEC1M5Q9mik9hTqoToYWb3Q';
 
 //Autenticação: primeiro deve ser dado permissão ao usuário criado ver "client_email": "newcrud@newcrudgseets.iam.gserviceaccount.com",
 async function authenticate() {
     const auth = await new google.auth.GoogleAuth({
-        credentials,
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        credentials: GOOGLE_CREDENTIALS,
+        scopes: [
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/drive'
+        ],
     });
 
-    return google.sheets({
-        version: 'v4',
-        auth
-    });
+    const googleAuth = {
+        sheets: google.sheets({ version: 'v4', auth }),
+        drive: google.drive({ version: 'v3', auth })
+    }
+
+    return googleAuth;
 }
 
 async function createRange(values, plan, cells) {
     //instancia da planilha do google ja autenticada: 
-    const googleSheetsInstance = await authenticate();
+    const googleAuth = await authenticate();
+    const googleSheetsInstance = googleAuth.sheets;
 
     const range = `${plan}!${cells}`;
     const request = {
-        spreadsheetId,//ida da planilha
+        spreadsheetId: SPREADSHEET_ID,//ida da planilha
         range: range, //nome da aba e celulas
         insertDataOption: 'INSERT_ROWS',
         valueInputOption: "USER_ENTERED",
@@ -44,11 +50,12 @@ async function createRange(values, plan, cells) {
 
 async function updateRange(values, plan, cells) {
     //instancia da planilha do google ja autenticada: 
-    const googleSheetsInstance = await authenticate();
+    const googleAuth = await authenticate();
+    const googleSheetsInstance = googleAuth.sheets;
 
     const range = `${plan}!${cells}`;
     const request = {
-        spreadsheetId,//ida da planilha
+        spreadsheetId: SPREADSHEET_ID,//ida da planilha
         range: range, //nome da aba e celulas
         valueInputOption: 'RAW',
         resource: {
@@ -66,11 +73,12 @@ async function updateRange(values, plan, cells) {
 }
 
 async function clearRange(plan, cells) {
-    const googleSheetsInstance = await authenticate();
+    const googleAuth = await authenticate();
+    const googleSheetsInstance = googleAuth.sheets;
 
     const range = `${plan}!${cells}`;
     const request = {
-        spreadsheetId,
+        spreadsheetId: SPREADSHEET_ID,
         range: range
     }
 
@@ -84,11 +92,12 @@ async function clearRange(plan, cells) {
 }
 
 async function getRange(plan, cells) {
-    const googleSheetsInstance = await authenticate();
+    const googleAuth = await authenticate();
+    const googleSheetsInstance = googleAuth.sheets;
 
     const range = `${plan}!${cells}`;
     const request = {
-        spreadsheetId,
+        spreadsheetId: SPREADSHEET_ID,
         range: range
     }
 
@@ -103,16 +112,96 @@ async function getRange(plan, cells) {
 
 }
 
-//criar a planilha e tornar outro usuário proprietário:
+async function crateNewTab(planName) {
+    const googleAuth = await authenticate();
+    const googleSheetsInstance = googleAuth.sheets;
 
+    // Obter informações sobre as guias existentes
+    const { data: sheetInfo } = await googleSheetsInstance.spreadsheets.get({
+        spreadsheetId: SPREADSHEET_ID,
+    });
+    // Verificar se a guia ja existe
+    const tabExists = sheetInfo.sheets.some(sheet => sheet.properties.title === planName);
+    if (tabExists) {
+        console.log(`Ja existe uma guia chamada '${planName}'. Verifique!`);
+        return;
+    }
 
+    const request = {
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+            requests: [
+                {
+                    addSheet: {
+                        properties: {
+                            title: planName,
+                        },
+                    },
+                },
+            ],
+        },
+    }
 
+    try {
+        // Adicionar nova guia à planilha existente
+        const response = await googleSheetsInstance.spreadsheets.batchUpdate(request);
+        console.log('Nova aba criada:', response);
+        return planName;
 
+    } catch (err) {
+        console.error('Erro ao ler registros:', err.message);
+        return null;
+    }
 
+}
 
+async function deleteExistingTab(planName) {
+    const googleAuth = await authenticate();
+    const googleSheetsInstance = googleAuth.sheets;
 
+    // Obter informações sobre as guias existentes
+    const { data: sheetInfo } = await googleSheetsInstance.spreadsheets.get({
+        spreadsheetId: SPREADSHEET_ID,
+    });
 
+    // Verificar se a guia existe
+    const tabExists = sheetInfo.sheets.some(sheet => sheet.properties.title === planName);
+    if (!tabExists) {
+        console.log(`A guia '${planName}' não existe. Verifique!`);
+        return;
+    }
 
+    const request = {
+        spreadsheetId: SPREADSHEET_ID,
+        resource: {
+            requests: [
+                {
+                    deleteSheet: {
+                        sheetId: getSheetId(sheetInfo.sheets, planName),
+                    },
+                },
+            ],
+        },
+    }
+
+    try {
+        // Deletar a guia existente
+        const response = await googleSheetsInstance.spreadsheets.batchUpdate(request);
+        console.log('Guia excluida com sucesso:', response);
+
+    } catch (err) {
+        console.error('Erro ao ler registros:', err.message);
+    }
+
+}
+
+// Função auxiliar para obter o ID da guia pelo nome
+function getSheetId(sheets, tabName) {
+    const sheet = sheets.find(sheet => sheet.properties.title === tabName);
+    return sheet ? sheet.properties.sheetId : null;
+}
+
+//--------------------------------------------------------------------------------------------------
 
 
 module.exports = {
@@ -120,32 +209,6 @@ module.exports = {
     clearRange,
     updateRange,
     getRange,
+    crateNewTab,
+    deleteExistingTab,
 };
-
-
-//----------------------------------------------
-//clearRange("Plan1", "A1:M1");
-
-
-
-//----------------------------------------------
-const valores = [
-    ["AAA", "BBB", "CCC"],
-    ["DDD", "EEE", "FFF"],
-    ["GGG", "HHH", "JJJ"],
-];
-//createRange(valores, "Plan1", "A1");
-
-
-
-//----------------------------------------------
-const valores1 = [
-    ["888", "HHH", "KKK"],
-    ["LLL", "PPP", "ZZZ"],
-    ["MMM", "UUU", "YYY"],
-];
-//updateRange(valores1, "Plan1", "A1");
-
-
-//----------------------------------------------
-//getRange("Plan1", "A:H");
