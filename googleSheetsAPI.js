@@ -124,7 +124,7 @@ async function crateNewTab(planName) {
     const tabExists = sheetInfo.sheets.some(sheet => sheet.properties.title === planName);
     if (tabExists) {
         console.log(`Ja existe uma guia chamada '${planName}'. Verifique!`);
-        return;
+        return planName;
     }
 
     const request = {
