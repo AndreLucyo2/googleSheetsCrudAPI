@@ -112,19 +112,19 @@ async function getRange(plan, cells) {
 
 }
 
-async function crateNewTab(planName) {
+async function crateNewTab(tabName) {
     const googleAuth = await authenticate();
     const googleSheetsInstance = googleAuth.sheets;
 
     // Obter informações sobre as guias existentes
-    const { data: sheetInfo } = await googleSheetsInstance.spreadsheets.get({
+    const { data } = await googleSheetsInstance.spreadsheets.get({
         spreadsheetId: SPREADSHEET_ID,
     });
     // Verificar se a guia ja existe
-    const tabExists = sheetInfo.sheets.some(sheet => sheet.properties.title === planName);
+    const tabExists = data.sheets.some(sheet => sheet.properties.title === tabName);
     if (tabExists) {
-        console.log(`Ja existe uma guia chamada '${planName}'. Verifique!`);
-        return planName;
+        console.log(`Ja existe uma guia chamada '${tabName}'. Verifique!`);
+        return tabName;
     }
 
     const request = {
@@ -134,7 +134,7 @@ async function crateNewTab(planName) {
                 {
                     addSheet: {
                         properties: {
-                            title: planName,
+                            title: tabName,
                         },
                     },
                 },
@@ -146,51 +146,57 @@ async function crateNewTab(planName) {
         // Adicionar nova guia à planilha existente
         const response = await googleSheetsInstance.spreadsheets.batchUpdate(request);
         console.log('Nova aba criada:', response);
-        return planName;
+        return tabName;
 
     } catch (err) {
-        console.error('Erro ao ler registros:', err.message);
+        console.error('Erro ao criar nova guia:', err.message);
         return null;
     }
 
 }
 
 async function deleteExistingTab(planName) {
-    const googleAuth = await authenticate();
-    const googleSheetsInstance = googleAuth.sheets;
-
-    // Obter informações sobre as guias existentes
-    const { data: sheetInfo } = await googleSheetsInstance.spreadsheets.get({
-        spreadsheetId: SPREADSHEET_ID,
-    });
-
-    // Verificar se a guia existe
-    const tabExists = sheetInfo.sheets.some(sheet => sheet.properties.title === planName);
-    if (!tabExists) {
-        console.log(`A guia '${planName}' não existe. Verifique!`);
-        return;
-    }
-
-    const request = {
-        spreadsheetId: SPREADSHEET_ID,
-        resource: {
-            requests: [
-                {
-                    deleteSheet: {
-                        sheetId: getSheetId(sheetInfo.sheets, planName),
-                    },
-                },
-            ],
-        },
-    }
 
     try {
+
+        const googleAuth = await authenticate();
+        const googleSheetsInstance = googleAuth.sheets;
+
+        // Obter informações sobre as guias existentes
+        const { data } = await googleSheetsInstance.spreadsheets.get({
+            spreadsheetId: SPREADSHEET_ID,
+        });
+
+        // Verificar se a guia existe
+        const tabExists = data.sheets.some(sheet => sheet.properties.title === planName);
+        if (!tabExists) {
+            console.log(`A guia '${planName}' não existe. Verifique!`);
+            return;
+        }
+
+        const sheetInfo = data.sheets.find(sheet => sheet.properties.title === planName);
+        const sheetId = sheetInfo ? sheetInfo.properties.sheetId : null;
+
+        const request = {
+            spreadsheetId: SPREADSHEET_ID,
+            resource: {
+                requests: [
+                    {
+                        deleteSheet: {
+                            sheetId,
+                        },
+                    },
+                ],
+            },
+        }
+
+
         // Deletar a guia existente
         const response = await googleSheetsInstance.spreadsheets.batchUpdate(request);
         console.log('Guia excluida com sucesso:', response);
 
     } catch (err) {
-        console.error('Erro ao ler registros:', err.message);
+        console.error('Erro excluida registros:', err.message);
     }
 
 }
