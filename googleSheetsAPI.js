@@ -201,15 +201,6 @@ async function deleteExistingTab(planName) {
 
 }
 
-// Função auxiliar para obter o ID da guia pelo nome
-function getSheetId(sheets, tabName) {
-    const sheet = sheets.find(sheet => sheet.properties.title === tabName);
-    return sheet ? sheet.properties.sheetId : null;
-}
-
-//--------------------------------------------------------------------------------------------------
-
-
 module.exports = {
     createRange,
     clearRange,
